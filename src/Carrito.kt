@@ -1,51 +1,39 @@
 class Carrito {
-    private val items = mutableListOf<ItemCarrito>()
 
+    private val items: MutableList<ItemCarrito> = mutableListOf()
+
+    /** Agrega un producto (si existe en el carrito, suma cantidades) */
     fun agregarProducto(producto: Producto, cantidad: Int) {
-        val existente = items.find { it.producto.id == producto.id }
-        if (existente != null) {
+        require(cantidad > 0) { "La cantidad debe ser mayor que 0" }
+        val existente = items.firstOrNull { it.producto.id == producto.id }
+        if (existente == null) {
+            items += ItemCarrito(producto, cantidad)
+        } else {
             existente.cantidad += cantidad
+        }
+    }
+
+    /**
+     * Elimina cantidad de un producto por ID. Si queda 0, lo remueve.
+     * @return true si modificó algo, false si no estaba en el carrito.
+     */
+    fun eliminarProducto(idProducto: Int, cantidad: Int): Boolean {
+        require(cantidad > 0) { "La cantidad debe ser mayor que 0" }
+        val existente = items.firstOrNull { it.producto.id == idProducto } ?: return false
+        if (cantidad >= existente.cantidad) {
+            items.remove(existente)
         } else {
-            items.add(ItemCarrito(producto, cantidad))
+            existente.cantidad -= cantidad
         }
-        producto.cantidadDisponible -= cantidad
+        return true
     }
 
-    fun eliminarProducto(id: Int) {
-        val item = items.find { it.producto.id == id }
-        if (item != null) {
-            item.producto.cantidadDisponible += item.cantidad
-            items.remove(item)
-            println("Producto eliminado del carrito.")
-        } else {
-            println("Producto no encontrado en el carrito.")
-        }
-    }
+    /** Lectura inmutable */
+    fun obtenerItems(): List<ItemCarrito> = items.toList()
 
-    fun mostrarCarrito() {
-        if (items.isEmpty()) {
-            println("El carrito está vacío.")
-            return
-        }
-        println("\n--- Carrito de Compras ---")
-        for (item in items) {
-            val total = item.cantidad * item.producto.precio
-            println("${item.producto.nombre} - Cant: ${item.cantidad}, Unit: $${item.producto.precio}, Total: $${"%.2f".format(total)}")
-        }
-        println("Total General: $${"%.2f".format(calcularTotal())}")
-    }
+    /** Total */
+    fun total(): Double = items.sumOf { it.cantidad * it.producto.precio }
 
-    fun calcularTotal(): Double {
-        return items.sumOf { it.cantidad * it.producto.precio }
-    }
-
-    fun generarFactura() {
-        println("\n======= FACTURA =======")
-        mostrarCarrito()
-        println("========================")
-    }
-
-    fun vaciarCarrito() {
-        items.clear()
-    }
+    /** Vaciar carrito */
+    fun vaciar() { items.clear() }
 }

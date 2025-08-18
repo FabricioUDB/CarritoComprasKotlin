@@ -4,3 +4,4 @@ data class Producto(
     val precio: Double,
     var cantidadDisponible: Int
 )
+
