@@ -63,13 +63,7 @@ Seleccione una opción:
 5. Confirmar compra
 6. Salir
 
-FACTURA GENERADA:
-Producto: Laptop x 1 - $850.00
-Producto: Mouse x 2 - $15.00
----------------------------
-TOTAL: $880.00
-IVA (13%): $114.40
-TOTAL A PAGAR: $994.40
+
 
 -----------------------------------------
 CONCLUSIÓN
