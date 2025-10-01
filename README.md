@@ -7,7 +7,7 @@ Integrantes:
 - Angel Marcelo Delgado Estrada — DE241507
 
 -----------------------------------------
-DESCRIPCIÓN DEL PROYECTO
+DESCRIPCIÓN GENERAL DEL PROYECTO
 Este proyecto consiste en el desarrollo de un Carrito de Compras en Kotlin, ejecutado en modo consola.
 El sistema permite a los usuarios visualizar productos, agregar y eliminar artículos del carrito,
 calcular el total de la compra y generar una factura detallada.
