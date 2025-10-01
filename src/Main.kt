@@ -1,12 +1,11 @@
-// ===== UI Helpers (ANSI + dibujo de menú/tablas) =====
+import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.util.Currency
+import java.text.NumberFormat
 
-/**
- * Objeto UI
- *
- * Este objeto contiene funciones auxiliares para mejorar la interfaz
- * en consola. Usa códigos ANSI para dar color, estilos (negrita, reset)
- * y dibuja tablas/menús de forma más visual.
- */
+// ===== UI Helpers (ANSI + dibujo de menú/tablas) =====
 object UI {
     // Códigos ANSI
     const val RESET = "\u001B[0m"
@@ -19,19 +18,24 @@ object UI {
     private const val FG_WARN    = "\u001B[38;5;178m"   // ámbar
     private const val FG_MUTED   = "\u001B[38;5;245m"   // gris
 
-    /** Limpia la pantalla de la consola */
-    fun clear() {
-        print("\u001B[2J\u001B[H")
+    // Formato de moneda USD con locale es-SV
+    private fun fmtMoney(v: Double): String {
+        val nf = NumberFormat.getCurrencyInstance(Locale("es", "SV"))
+        nf.currency = Currency.getInstance("USD")
+        return nf.format(v)
     }
 
-    /** Pausa el programa hasta que el usuario presione ENTER */
+    /** Limpia la pantalla de la consola */
+    fun clear() { print("\u001B[2J\u001B[H") }
+
+    /** Pausa hasta ENTER */
     fun pause(msg: String = "Presiona ENTER para continuar...") {
         println()
         print(FG_MUTED + msg + RESET)
         readLine()
     }
 
-    /** Imprime un encabezado estilizado con un título */
+    /** Encabezado */
     fun header(title: String) {
         val line = "─".repeat(title.length + 4)
         println("${FG_PRIMARY}┌$line┐$RESET")
@@ -39,12 +43,7 @@ object UI {
         println("${FG_PRIMARY}└$line┘$RESET")
     }
 
-    /**
-     * Dibuja un menú de opciones.
-     * @param title Título del menú
-     * @param items Lista de opciones (cada String es una línea)
-     * @param footer Texto opcional como pie de menú
-     */
+    /** Menú */
     fun menu(title: String, items: List<String>, footer: String? = null) {
         header(title)
         items.forEach { println("${FG_ACCENT}$it$RESET") }
@@ -57,10 +56,8 @@ object UI {
 
     /** Tabla de productos (ID, nombre, precio, stock) */
     fun printProductsTable(productos: List<Producto>, showStock: Boolean = true) {
-        if (productos.isEmpty()) {
-            println("${FG_WARN}No hay productos disponibles.$RESET"); return
-        }
-        val colId = 4; val colNombre = 18; val colPrecio = 10; val colStock = 7
+        if (productos.isEmpty()) { println("${FG_WARN}No hay productos disponibles.$RESET"); return }
+        val colId = 4; val colNombre = 18; val colPrecio = 12; val colStock = 7
         fun pad(s: String, w: Int) = if (s.length >= w) s.take(w - 1) + "…" else s + " ".repeat(w - s.length)
 
         val totalWidth = 2 + colId + 3 + colNombre + 3 + colPrecio + (if (showStock) 3 + colStock else 0) + 2
@@ -80,7 +77,7 @@ object UI {
             val row = buildString {
                 append("│ "); append(pad(p.id.toString(), colId)); append(" │ ")
                 append(pad(p.nombre, colNombre)); append(" │ ")
-                append(pad("$" + "%.2f".format(p.precio), colPrecio))
+                append(pad(fmtMoney(p.precio), colPrecio))
                 if (showStock) { append(" │ "); append(pad(p.cantidadDisponible.toString(), colStock)) }
                 append(" │")
             }
@@ -92,7 +89,7 @@ object UI {
     /** Tabla del carrito (ID, nombre, cantidad, precio, subtotal) */
     fun printCartTable(items: List<ItemCarrito>) {
         if (items.isEmpty()) { println("${FG_WARN}Tu carrito está vacío.$RESET"); return }
-        val colId = 4; val colNombre = 18; val colCantidad = 9; val colPrecio = 10; val colSubtotal = 11
+        val colId = 4; val colNombre = 18; val colCantidad = 9; val colPrecio = 12; val colSubtotal = 14
         fun pad(s: String, w: Int) = if (s.length >= w) s.take(w - 1) + "…" else s + " ".repeat(w - s.length)
 
         val totalWidth = 2 + colId + 3 + colNombre + 3 + colCantidad + 3 + colPrecio + 3 + colSubtotal + 2
@@ -109,13 +106,13 @@ object UI {
         println(FG_MUTED + "├" + "─".repeat(totalWidth - 2) + "┤" + RESET)
 
         items.forEach { itc ->
+            val sub = itc.cantidad * itc.producto.precio
             val row = buildString {
                 append("│ "); append(pad(itc.producto.id.toString(), colId)); append(" │ ")
                 append(pad(itc.producto.nombre, colNombre)); append(" │ ")
                 append(pad(itc.cantidad.toString(), colCantidad)); append(" │ ")
-                append(pad("$" + "%.2f".format(itc.producto.precio), colPrecio)); append(" │ ")
-                val sub = itc.cantidad * itc.producto.precio
-                append(pad("$" + "%.2f".format(sub), colSubtotal)); append(" │")
+                append(pad(fmtMoney(itc.producto.precio), colPrecio)); append(" │ ")
+                append(pad(fmtMoney(sub), colSubtotal)); append(" │")
             }
             println(row)
         }
@@ -146,7 +143,6 @@ fun readPositiveInt(prompt: String): Int {
 }
 
 // ===== Programa principal =====
-
 fun main() {
     // Inventario inicial
     val inventario = mutableListOf(
@@ -155,16 +151,38 @@ fun main() {
         Producto(id = 3, nombre = "Teclado", precio = 45.0,  cantidadDisponible = 7),
         Producto(id = 4, nombre = "Monitor", precio = 250.0, cantidadDisponible = 3)
     )
-
-    // Carrito (lista local de items)
     val carritoItems = mutableListOf<ItemCarrito>()
 
-    // --- Opciones del menú ---
+    val IVA = 0.13
+    val cupones = mapOf("UDB10" to 0.10, "UDB20" to 0.20)
 
+    fun subtotalCarrito(): Double = carritoItems.sumOf { it.cantidad * it.producto.precio }
+
+    fun guardarRecibo(descripcion: String) {
+        val dir = File("recibos")
+        if (!dir.exists()) dir.mkdirs()
+        val ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+        val f = File(dir, "recibo-$ts.txt")
+        f.writeText(descripcion)
+        UI.success("Recibo guardado en: ${f.absolutePath}")
+    }
+
+    // --- Opciones del menú ---
     fun verProductos() {
         UI.clear()
         UI.header("Productos disponibles")
-        UI.printProductsTable(inventario, showStock = true)
+        UI.printProductsTable(inventario.sortedBy { it.id }, showStock = true)
+        UI.pause()
+    }
+
+    fun buscarProducto() {
+        UI.clear()
+        UI.header("Buscar producto")
+        print("Texto a buscar: ")
+        val q = readLine()?.trim()?.lowercase().orEmpty()
+        val res = inventario.filter { it.nombre.lowercase().contains(q) }
+        if (res.isEmpty()) UI.warn("Sin coincidencias para \"$q\".")
+        else UI.printProductsTable(res, showStock = true)
         UI.pause()
     }
 
@@ -175,20 +193,12 @@ fun main() {
 
         val id = readPositiveInt("Ingresa el ID del producto: ")
         val producto = inventario.firstOrNull { it.id == id }
-        if (producto == null) {
-            UI.warn("No existe un producto con ID $id.")
-            UI.pause(); return
-        }
-        if (producto.cantidadDisponible <= 0) {
-            UI.warn("Sin stock para '${producto.nombre}'.")
-            UI.pause(); return
-        }
+        if (producto == null) { UI.warn("No existe un producto con ID $id."); UI.pause(); return }
+        if (producto.cantidadDisponible <= 0) { UI.warn("Sin stock para '${producto.nombre}'."); UI.pause(); return }
+
         val cant = readIntInRange("Cantidad (1..${producto.cantidadDisponible}): ", 1..producto.cantidadDisponible)
-
         val item = carritoItems.firstOrNull { it.producto.id == id }
-        if (item == null) carritoItems.add(ItemCarrito(producto, cant))
-        else item.cantidad += cant
-
+        if (item == null) carritoItems.add(ItemCarrito(producto, cant)) else item.cantidad += cant
         producto.cantidadDisponible -= cant
 
         UI.success("Se agregaron $cant x '${producto.nombre}' al carrito.")
@@ -199,49 +209,72 @@ fun main() {
         UI.clear()
         UI.header("Tu carrito")
         UI.printCartTable(carritoItems)
-        val total = carritoItems.sumOf { it.cantidad * it.producto.precio }
-        println("${UI.BOLD}Total: $${"%.2f".format(total)}${UI.RESET}")
+        val sub = subtotalCarrito()
+        val nf = NumberFormat.getCurrencyInstance(Locale("es","SV")).apply { currency = Currency.getInstance("USD") }
+        println("${UI.BOLD}Subtotal: ${nf.format(sub)}${UI.RESET}")
+        println("IVA (13%): ${nf.format(sub * IVA)}")
+        println("Total aprox.: ${nf.format(sub * (1 + IVA))}")
         UI.pause()
     }
 
     fun eliminarDelCarrito() {
         UI.clear()
         UI.header("Eliminar del carrito")
-        if (carritoItems.isEmpty()) {
-            UI.warn("Tu carrito está vacío.")
-            UI.pause(); return
-        }
+        if (carritoItems.isEmpty()) { UI.warn("Tu carrito está vacío."); UI.pause(); return }
         UI.printCartTable(carritoItems)
+
         val id = readPositiveInt("ID del producto a eliminar: ")
         val item = carritoItems.firstOrNull { it.producto.id == id }
-        if (item == null) {
-            UI.warn("Ese producto no está en el carrito.")
-            UI.pause(); return
-        }
+        if (item == null) { UI.warn("Ese producto no está en el carrito."); UI.pause(); return }
+
         val cant = readIntInRange("Cantidad a eliminar (1..${item.cantidad}): ", 1..item.cantidad)
-
-        // Devolver stock
         inventario.firstOrNull { it.id == id }?.let { it.cantidadDisponible += cant }
-
         if (cant == item.cantidad) carritoItems.remove(item) else item.cantidad -= cant
+
         UI.success("Se eliminaron $cant x '${item.producto.nombre}'.")
         UI.pause()
     }
 
     fun finalizarCompra() {
         UI.clear()
-        if (carritoItems.isEmpty()) {
-            UI.warn("Tu carrito está vacío.")
-            UI.pause(); return
-        }
+        if (carritoItems.isEmpty()) { UI.warn("Tu carrito está vacío."); UI.pause(); return }
+
+        val nf = NumberFormat.getCurrencyInstance(Locale("es","SV")).apply { currency = Currency.getInstance("USD") }
+        val sub = subtotalCarrito()
         UI.header("Resumen de compra")
         UI.printCartTable(carritoItems)
-        val total = carritoItems.sumOf { it.cantidad * it.producto.precio }
-        println("${UI.BOLD}Total a pagar: $${"%.2f".format(total)}${UI.RESET}")
+        println("Subtotal: ${nf.format(sub)}")
+
+        print("¿Tienes cupón (UDB10/UDB20)? (deja vacío si no): ")
+        val cup = readLine()?.trim()?.uppercase()
+        val descPct = cupones[cup] ?: 0.0
+        if (descPct > 0) println("Cupón aplicado: -${(descPct*100).toInt()}%")
+
+        val desc = sub * descPct
+        val base = sub - desc
+        val iva = base * IVA
+        val total = base + iva
+
+        println("Descuento: ${nf.format(desc)}")
+        println("IVA (13%): ${nf.format(iva)}")
+        println("${UI.BOLD}Total a pagar: ${nf.format(total)}${UI.RESET}")
 
         print("Confirmar compra (s/n): ")
         val conf = readLine()?.trim()?.lowercase()
         if (conf == "s" || conf == "si" || conf == "sí") {
+            // Guardar recibo
+            val detalles = buildString {
+                appendLine("=== RECIBO ===")
+                appendLine("Fecha: ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}")
+                carritoItems.forEach {
+                    appendLine("- ${it.producto.nombre} x${it.cantidad} @ ${nf.format(it.producto.precio)} = ${nf.format(it.cantidad * it.producto.precio)}")
+                }
+                appendLine("Subtotal: ${nf.format(sub)}")
+                if (descPct > 0) appendLine("Cupón $cup (-${(descPct*100).toInt()}%): ${nf.format(desc)}")
+                appendLine("IVA (13%): ${nf.format(iva)}")
+                appendLine("TOTAL: ${nf.format(total)}")
+            }
+            guardarRecibo(detalles)
             carritoItems.clear()
             UI.success("¡Compra realizada con éxito!")
         } else {
@@ -257,22 +290,24 @@ fun main() {
             title = "Carrito de Compras",
             items = listOf(
                 " 1) Ver productos",
-                " 2) Agregar producto al carrito",
-                " 3) Ver carrito",
-                " 4) Eliminar producto del carrito",
-                " 5) Finalizar compra",
-                " 6) Salir"
+                " 2) Buscar producto",
+                " 3) Agregar producto al carrito",
+                " 4) Ver carrito",
+                " 5) Eliminar producto del carrito",
+                " 6) Finalizar compra",
+                " 7) Salir"
             ),
-            footer = "Usa los números 1-6"
+            footer = "Usa los números 1-7"
         )
 
-        when (readIntInRange("", 1..6)) {
+        when (readIntInRange("", 1..7)) {
             1 -> verProductos()
-            2 -> agregarProducto()
-            3 -> verCarrito()
-            4 -> eliminarDelCarrito()
-            5 -> finalizarCompra()
-            6 -> { UI.clear(); UI.success("¡Gracias por usar el sistema!"); break }
+            2 -> buscarProducto()
+            3 -> agregarProducto()
+            4 -> verCarrito()
+            5 -> eliminarDelCarrito()
+            6 -> finalizarCompra()
+            7 -> { UI.clear(); UI.success("¡Gracias por usar el sistema!"); break }
         }
     }
 }
