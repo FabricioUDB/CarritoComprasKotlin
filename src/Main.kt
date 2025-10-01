@@ -1,13 +1,34 @@
 import java.io.File
+import java.text.NumberFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.Currency
-import java.text.NumberFormat
+import java.util.Locale
 
-// ===== UI Helpers (ANSI + dibujo de menú/tablas) =====
+// ===================== LOG A ARCHIVO =====================
+object LogFile {
+    private val file = File("logs/app.log")
+
+    private fun ts(): String =
+        LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+
+    private fun ensureDir() { file.parentFile?.mkdirs() }
+
+    fun i(msg: String) {
+        ensureDir()
+        file.appendText("${ts()} [INFO] $msg\n")
+    }
+
+    fun e(msg: String, ex: Throwable? = null) {
+        ensureDir()
+        file.appendText("${ts()} [ERROR] $msg\n")
+        ex?.let { file.appendText(it.stackTraceToString() + "\n") }
+    }
+}
+
+// ===================== UI HELPERS (ANSI + TABLAS) =====================
 object UI {
-    // Códigos ANSI
+    // ANSI
     const val RESET = "\u001B[0m"
     const val BOLD  = "\u001B[1m"
 
@@ -19,23 +40,20 @@ object UI {
     private const val FG_MUTED   = "\u001B[38;5;245m"   // gris
 
     // Formato de moneda USD con locale es-SV
-    private fun fmtMoney(v: Double): String {
-        val nf = NumberFormat.getCurrencyInstance(Locale("es", "SV"))
+    private fun money(v: Double): String {
+        val nf = NumberFormat.getCurrencyInstance(Locale("es","SV"))
         nf.currency = Currency.getInstance("USD")
         return nf.format(v)
     }
 
-    /** Limpia la pantalla de la consola */
     fun clear() { print("\u001B[2J\u001B[H") }
 
-    /** Pausa hasta ENTER */
     fun pause(msg: String = "Presiona ENTER para continuar...") {
         println()
         print(FG_MUTED + msg + RESET)
         readLine()
     }
 
-    /** Encabezado */
     fun header(title: String) {
         val line = "─".repeat(title.length + 4)
         println("${FG_PRIMARY}┌$line┐$RESET")
@@ -43,7 +61,6 @@ object UI {
         println("${FG_PRIMARY}└$line┘$RESET")
     }
 
-    /** Menú */
     fun menu(title: String, items: List<String>, footer: String? = null) {
         header(title)
         items.forEach { println("${FG_ACCENT}$it$RESET") }
@@ -54,7 +71,6 @@ object UI {
         print("${BOLD}Selecciona una opción:${RESET} ")
     }
 
-    /** Tabla de productos (ID, nombre, precio, stock) */
     fun printProductsTable(productos: List<Producto>, showStock: Boolean = true) {
         if (productos.isEmpty()) { println("${FG_WARN}No hay productos disponibles.$RESET"); return }
         val colId = 4; val colNombre = 18; val colPrecio = 12; val colStock = 7
@@ -77,7 +93,7 @@ object UI {
             val row = buildString {
                 append("│ "); append(pad(p.id.toString(), colId)); append(" │ ")
                 append(pad(p.nombre, colNombre)); append(" │ ")
-                append(pad(fmtMoney(p.precio), colPrecio))
+                append(pad(money(p.precio), colPrecio))
                 if (showStock) { append(" │ "); append(pad(p.cantidadDisponible.toString(), colStock)) }
                 append(" │")
             }
@@ -86,7 +102,6 @@ object UI {
         println(FG_MUTED + "└" + "─".repeat(totalWidth - 2) + "┘" + RESET)
     }
 
-    /** Tabla del carrito (ID, nombre, cantidad, precio, subtotal) */
     fun printCartTable(items: List<ItemCarrito>) {
         if (items.isEmpty()) { println("${FG_WARN}Tu carrito está vacío.$RESET"); return }
         val colId = 4; val colNombre = 18; val colCantidad = 9; val colPrecio = 12; val colSubtotal = 14
@@ -111,8 +126,8 @@ object UI {
                 append("│ "); append(pad(itc.producto.id.toString(), colId)); append(" │ ")
                 append(pad(itc.producto.nombre, colNombre)); append(" │ ")
                 append(pad(itc.cantidad.toString(), colCantidad)); append(" │ ")
-                append(pad(fmtMoney(itc.producto.precio), colPrecio)); append(" │ ")
-                append(pad(fmtMoney(sub), colSubtotal)); append(" │")
+                append(pad(money(itc.producto.precio), colPrecio)); append(" │ ")
+                append(pad(money(sub), colSubtotal)); append(" │")
             }
             println(row)
         }
@@ -123,27 +138,30 @@ object UI {
     fun warn(msg: String)    = println("$FG_WARN$msg$RESET")
 }
 
-// ===== Helpers de entrada =====
+// ===================== HELPERS DE ENTRADA =====================
 fun readIntInRange(prompt: String, range: IntRange): Int {
     while (true) {
         print(prompt)
         val n = readLine()?.trim()?.toIntOrNull()
         if (n != null && n in range) return n
         println("Entrada inválida. Intenta de nuevo.")
+        LogFile.i("Entrada inválida para '$prompt'")
     }
 }
-
 fun readPositiveInt(prompt: String): Int {
     while (true) {
         print(prompt)
         val n = readLine()?.trim()?.toIntOrNull()
         if (n != null && n > 0) return n
         println("Cantidad inválida. Intenta de nuevo.")
+        LogFile.i("Cantidad inválida para '$prompt'")
     }
 }
 
-// ===== Programa principal =====
+// ===================== PROGRAMA PRINCIPAL =====================
 fun main() {
+    LogFile.i("Aplicación iniciada")
+
     // Inventario inicial
     val inventario = mutableListOf(
         Producto(id = 1, nombre = "Laptop",  precio = 700.0, cantidadDisponible = 5),
@@ -158,16 +176,16 @@ fun main() {
 
     fun subtotalCarrito(): Double = carritoItems.sumOf { it.cantidad * it.producto.precio }
 
-    fun guardarRecibo(descripcion: String) {
-        val dir = File("recibos")
-        if (!dir.exists()) dir.mkdirs()
-        val ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
-        val f = File(dir, "recibo-$ts.txt")
-        f.writeText(descripcion)
+    fun guardarRecibo(texto: String) {
+        val dir = File("recibos").apply { if (!exists()) mkdirs() }
+        val ts  = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+        val f   = File(dir, "recibo-$ts.txt")
+        f.writeText(texto)
         UI.success("Recibo guardado en: ${f.absolutePath}")
+        LogFile.i("Recibo guardado: ${f.absolutePath}")
     }
 
-    // --- Opciones del menú ---
+    // -------- Opciones del menú --------
     fun verProductos() {
         UI.clear()
         UI.header("Productos disponibles")
@@ -193,15 +211,23 @@ fun main() {
 
         val id = readPositiveInt("Ingresa el ID del producto: ")
         val producto = inventario.firstOrNull { it.id == id }
-        if (producto == null) { UI.warn("No existe un producto con ID $id."); UI.pause(); return }
-        if (producto.cantidadDisponible <= 0) { UI.warn("Sin stock para '${producto.nombre}'."); UI.pause(); return }
-
+        if (producto == null) {
+            UI.warn("No existe un producto con ID $id.")
+            LogFile.i("Intento de agregar ID inexistente $id")
+            UI.pause(); return
+        }
+        if (producto.cantidadDisponible <= 0) {
+            UI.warn("Sin stock para '${producto.nombre}'.")
+            UI.pause(); return
+        }
         val cant = readIntInRange("Cantidad (1..${producto.cantidadDisponible}): ", 1..producto.cantidadDisponible)
+
         val item = carritoItems.firstOrNull { it.producto.id == id }
         if (item == null) carritoItems.add(ItemCarrito(producto, cant)) else item.cantidad += cant
         producto.cantidadDisponible -= cant
 
         UI.success("Se agregaron $cant x '${producto.nombre}' al carrito.")
+        LogFile.i("Agregado al carrito: $cant x ${producto.nombre} (ID=$id)")
         UI.pause()
     }
 
@@ -209,8 +235,8 @@ fun main() {
         UI.clear()
         UI.header("Tu carrito")
         UI.printCartTable(carritoItems)
-        val sub = subtotalCarrito()
         val nf = NumberFormat.getCurrencyInstance(Locale("es","SV")).apply { currency = Currency.getInstance("USD") }
+        val sub = subtotalCarrito()
         println("${UI.BOLD}Subtotal: ${nf.format(sub)}${UI.RESET}")
         println("IVA (13%): ${nf.format(sub * IVA)}")
         println("Total aprox.: ${nf.format(sub * (1 + IVA))}")
@@ -225,13 +251,17 @@ fun main() {
 
         val id = readPositiveInt("ID del producto a eliminar: ")
         val item = carritoItems.firstOrNull { it.producto.id == id }
-        if (item == null) { UI.warn("Ese producto no está en el carrito."); UI.pause(); return }
-
+        if (item == null) {
+            UI.warn("Ese producto no está en el carrito.")
+            UI.pause(); return
+        }
         val cant = readIntInRange("Cantidad a eliminar (1..${item.cantidad}): ", 1..item.cantidad)
+
         inventario.firstOrNull { it.id == id }?.let { it.cantidadDisponible += cant }
         if (cant == item.cantidad) carritoItems.remove(item) else item.cantidad -= cant
 
         UI.success("Se eliminaron $cant x '${item.producto.nombre}'.")
+        LogFile.i("Eliminado del carrito: $cant x ${item.producto.nombre} (ID=$id)")
         UI.pause()
     }
 
@@ -246,13 +276,13 @@ fun main() {
         println("Subtotal: ${nf.format(sub)}")
 
         print("¿Tienes cupón (UDB10/UDB20)? (deja vacío si no): ")
-        val cup = readLine()?.trim()?.uppercase()
+        val cup = readLine()?.trim()?.takeIf { it.isNotBlank() }?.uppercase()
         val descPct = cupones[cup] ?: 0.0
         if (descPct > 0) println("Cupón aplicado: -${(descPct*100).toInt()}%")
 
         val desc = sub * descPct
         val base = sub - desc
-        val iva = base * IVA
+        val iva  = base * IVA
         val total = base + iva
 
         println("Descuento: ${nf.format(desc)}")
@@ -262,7 +292,6 @@ fun main() {
         print("Confirmar compra (s/n): ")
         val conf = readLine()?.trim()?.lowercase()
         if (conf == "s" || conf == "si" || conf == "sí") {
-            // Guardar recibo
             val detalles = buildString {
                 appendLine("=== RECIBO ===")
                 appendLine("Fecha: ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}")
@@ -277,13 +306,15 @@ fun main() {
             guardarRecibo(detalles)
             carritoItems.clear()
             UI.success("¡Compra realizada con éxito!")
+            LogFile.i("Compra confirmada. Total=${nf.format(total)}")
         } else {
             UI.warn("Compra cancelada.")
+            LogFile.i("Compra cancelada por el usuario")
         }
         UI.pause()
     }
 
-    // --- Loop principal ---
+    // -------- Loop principal con manejo de errores --------
     while (true) {
         UI.clear()
         UI.menu(
@@ -300,14 +331,21 @@ fun main() {
             footer = "Usa los números 1-7"
         )
 
-        when (readIntInRange("", 1..7)) {
-            1 -> verProductos()
-            2 -> buscarProducto()
-            3 -> agregarProducto()
-            4 -> verCarrito()
-            5 -> eliminarDelCarrito()
-            6 -> finalizarCompra()
-            7 -> { UI.clear(); UI.success("¡Gracias por usar el sistema!"); break }
+        val opcion = readIntInRange("", 1..7)
+        try {
+            when (opcion) {
+                1 -> verProductos()
+                2 -> buscarProducto()
+                3 -> agregarProducto()
+                4 -> verCarrito()
+                5 -> eliminarDelCarrito()
+                6 -> finalizarCompra()
+                7 -> { UI.clear(); UI.success("¡Gracias por usar el sistema!"); LogFile.i("Aplicación finalizada"); break }
+            }
+        } catch (ex: Exception) {
+            UI.warn("Ocurrió un error inesperado. Revisa logs/app.log")
+            LogFile.e("Fallo al ejecutar opción $opcion", ex)
+            UI.pause()
         }
     }
 }
